@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import os
+import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import discord
 import httpx
@@ -101,11 +102,50 @@ class RepoMonitor:
         client = await self._get_http_client()
         url = f"https://api.github.com/repos/{repo.owner}/{repo.name}/commits"
         params = {"sha": repo.branch, "per_page": 10}
-        response = await client.get(url, params=params)
-        if response.status_code != 200:
-            self.log.warning("Failed to fetch commits for %s: %s", repo.slug, response.text)
+        backoff = 1.0
+
+        for attempt in range(3):
+            try:
+                response = await client.get(url, params=params)
+            except httpx.HTTPError as exc:
+                self.log.warning(
+                    "Network error fetching %s (attempt %s/3): %s", repo.slug, attempt + 1, exc
+                )
+                await asyncio.sleep(backoff)
+                backoff *= 2
+                continue
+
+            if response.status_code == 200:
+                return response.json()
+
+            if response.status_code in {500, 502, 503, 504}:
+                self.log.warning(
+                    "GitHub error %s for %s, retrying (attempt %s/3)",
+                    response.status_code,
+                    repo.slug,
+                    attempt + 1,
+                )
+                await asyncio.sleep(backoff)
+                backoff *= 2
+                continue
+
+            if response.status_code == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
+                reset_ts = response.headers.get("X-RateLimit-Reset")
+                reset_in = int(reset_ts) - int(time.time()) if reset_ts else None
+                if reset_in and reset_in > 0:
+                    self.log.error(
+                        "GitHub rate limit hit for %s. Resets in %s seconds.", repo.slug, reset_in
+                    )
+                else:
+                    self.log.error("GitHub rate limit hit for %s.", repo.slug)
+            else:
+                self.log.warning(
+                    "Failed to fetch commits for %s: %s %s", repo.slug, response.status_code, response.text
+                )
             return []
-        return response.json()
+
+        self.log.error("Exhausted retries fetching commits for %s", repo.slug)
+        return []
 
     async def run(self) -> None:
         await self.initialize()
@@ -118,11 +158,9 @@ class RepoMonitor:
                 await self.http_client.aclose()
 
     async def check_for_updates(self) -> None:
-        for repo in self.config.repos:
-            channel = await self._resolve_channel(repo)
-            if channel is None:
-                continue
-            await self._check_repo(repo, channel)
+        tasks = [self._check_repo_safe(repo) for repo in self.config.repos]
+        if tasks:
+            await asyncio.gather(*tasks)
 
     async def _resolve_channel(self, repo: RepoConfig) -> Optional[discord.abc.Messageable]:
         channel_id = repo.channel_id or self.config.channel_id
@@ -162,6 +200,16 @@ class RepoMonitor:
         self.last_seen[repo.slug] = new_commits[0]["sha"]
         await self._announce_commits(repo, list(reversed(new_commits)), channel)
 
+    async def _check_repo_safe(self, repo: RepoConfig) -> None:
+        channel = await self._resolve_channel(repo)
+        if channel is None:
+            return
+
+        try:
+            await self._check_repo(repo, channel)
+        except Exception:
+            self.log.exception("Unexpected error while checking %s", repo.slug)
+
     async def _announce_commits(
         self, repo: RepoConfig, commits: List[dict], channel: discord.abc.Messageable
     ) -> None:
@@ -175,7 +223,30 @@ class RepoMonitor:
             lines.append(f"• [`{sha}`]({url}) {message} — {author}")
 
         content = "\n".join(lines)
-        await channel.send(content)
+        for chunk in self._chunk_message(content):
+            await channel.send(chunk)
+
+    def _chunk_message(self, content: str, limit: int = 1800) -> Iterable[str]:
+        """Split long messages into Discord-safe chunks."""
+        if len(content) <= limit:
+            return [content]
+
+        chunks: List[str] = []
+        current: List[str] = []
+        current_len = 0
+
+        for line in content.splitlines():
+            if current_len + len(line) + 1 > limit:
+                chunks.append("\n".join(current))
+                current = []
+                current_len = 0
+            current.append(line)
+            current_len += len(line) + 1
+
+        if current:
+            chunks.append("\n".join(current))
+
+        return chunks
 
 
 def build_client(config: BotConfig) -> discord.Client:
