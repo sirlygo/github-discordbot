@@ -6,6 +6,8 @@ A lightweight Discord bot that posts new GitHub commits to a Discord channel. Co
 - Monitor multiple repositories and branches using a simple YAML config file.
 - Posts commit summaries with links directly in your Discord channel(s).
 - Optional GitHub token support for higher API limits.
+- Resilient polling with retries for transient GitHub errors and clearer rate-limit logs.
+- Automatically splits long announcements to stay under Discord's 2000-character limit.
 
 ## Setup
 1. **Install dependencies**
