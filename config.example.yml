@@ -1,0 +1,18 @@
+# Copy this file to config.yml and fill in your Discord bot token.
+discord_token: "YOUR_DISCORD_BOT_TOKEN"
+# Channel ID where updates should be posted by default.
+channel_id: 123456789012345678
+# Optional GitHub token to increase API limits. Leave blank to use unauthenticated requests.
+github_token: ""
+# How often (in seconds) the bot should poll each repository for new commits.
+poll_interval: 300
+# List of repositories to monitor. You can add as many as you like.
+repos:
+  - owner: octocat
+    name: Hello-World
+    branch: main
+    # Optional: override the default channel for this repo only.
+    # channel_id: 111111111111111111
+  - owner: another-user
+    name: another-repo
+    branch: develop
