@@ -10,15 +10,18 @@ A lightweight Discord bot that posts new GitHub commits to a Discord channel. Co
 - Automatically splits long announcements to stay under Discord's 2000-character limit.
 
 ## Setup
-1. **Install dependencies**
+1. **Run the setup script**
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
+   ./setup.sh
    ```
+   This creates a virtual environment in `.venv`, installs dependencies, and copies `config.example.yml` to `config.yml` if it
+   doesn't exist. You can override defaults with environment variables:
+   - `PYTHON` for an alternative Python executable.
+   - `VENV_DIR` for a different virtualenv path.
+   - `CONFIG_FILE` for a different config destination.
 2. **Create a Discord bot token** and invite it to your server with the `Send Messages` permission.
 3. **Create your config**
-   - Copy `config.example.yml` to `config.yml`.
+   - Open `config.yml` (created by the setup script, or copy `config.example.yml` manually if you skipped it).
    - Fill in your `discord_token`, default `channel_id`, and the repositories you want to watch.
    - Optionally set a `channel_id` per repository to route updates to different channels.
    - Set `github_token` if you have one to increase rate limits.
