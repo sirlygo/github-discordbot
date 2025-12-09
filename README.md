@@ -1,43 +1,49 @@
 # GitHub Discord Bot
 
-A lightweight Discord bot that posts new GitHub commits to a Discord channel. Configure it with one or more repositories and the bot will periodically announce new additions.
+A lightweight Discord bot that announces new GitHub commits in your Discord server. Point it at one or more repositories and it will periodically poll GitHub, detect new commits, and post concise summaries with direct links.
 
-## Features
-- Monitor multiple repositories and branches using a simple YAML config file.
-- Posts commit summaries with links directly in your Discord channel(s).
-- Optional GitHub token support for higher API limits.
-- Resilient polling with retries for transient GitHub errors and clearer rate-limit logs.
-- Automatically splits long announcements to stay under Discord's 2000-character limit.
+## Why this bot?
+- **Multi-repo aware:** Watch many repositories/branches from a single YAML config.
+- **Respectful of limits:** Optional GitHub tokens, retry logic, and clearer rate-limit logging.
+- **Discord-friendly messages:** Automatically splits long updates to stay under Discord's 2000-character limit.
+- **Simple to run:** One script, a virtual environment, and a small config file.
 
-## Setup
-1. **Run the setup script**
+## Prerequisites
+- Python 3.9+ (the setup script uses your default `python` unless overridden)
+- A Discord bot token with permission to send messages
+- (Optional) A GitHub personal access token for higher rate limits
+
+## Quick start
+1. **Set up the environment**
    ```bash
    ./setup.sh
    ```
-   This creates a virtual environment in `.venv`, installs dependencies, and copies `config.example.yml` to `config.yml` if it
-   doesn't exist. You can override defaults with environment variables:
-   - `PYTHON` for an alternative Python executable.
-   - `VENV_DIR` for a different virtualenv path.
-   - `CONFIG_FILE` for a different config destination.
-2. **Create a Discord bot token** and invite it to your server with the `Send Messages` permission.
-3. **Create your config**
-   - Open `config.yml` (created by the setup script, or copy `config.example.yml` manually if you skipped it).
-   - Fill in your `discord_token`, default `channel_id`, and the repositories you want to watch.
-   - Optionally set a `channel_id` per repository to route updates to different channels.
-   - Set `github_token` if you have one to increase rate limits.
-4. **Run the bot**
+   This creates `.venv`, installs dependencies, and copies `config.example.yml` to `config.yml` if it is missing. You can override defaults with environment variables:
+   - `PYTHON` – alternative Python executable
+   - `VENV_DIR` – destination for the virtual environment
+   - `CONFIG_FILE` – alternate path for the generated config file
+
+2. **Configure the bot**
+   Open `config.yml` and provide:
+   - `discord_token`: your Discord bot token
+   - `channel_id`: default Discord channel ID for announcements
+   - `repos`: list of repositories (owner/name/branch) to monitor
+   - `github_token` (optional): GitHub token to raise rate limits
+   You can also set a `channel_id` per repository entry to route updates to specific channels.
+
+3. **Run the bot**
    ```bash
+   source .venv/bin/activate  # or your custom VENV_DIR
    python bot.py
    ```
+   By default the bot reads `config.yml` in the project root. To specify another path, set `DISCORD_BOT_CONFIG=/path/to/config.yml` when running the script.
 
-The bot reads from `config.yml` by default. To use a different path, set `DISCORD_BOT_CONFIG=/path/to/config.yml` when running the script.
-
-## Configuration reference (`config.yml`)
+## Configuration reference
 ```yaml
 discord_token: "YOUR_DISCORD_BOT_TOKEN"
 channel_id: 123456789012345678 # default channel for all repos
-github_token: ""  # optional
-poll_interval: 300 # seconds between checks
+github_token: ""                # optional for higher rate limits
+poll_interval: 300              # seconds between checks
 repos:
   - owner: octocat
     name: Hello-World
@@ -49,11 +55,11 @@ repos:
 Add as many repositories as you like under `repos`. Each entry can target a different branch and channel.
 
 ## How it works
-- On startup, the bot records the latest commit per repository so it does not spam old commits.
-- Every `poll_interval` seconds, it asks the GitHub API for recent commits on each branch.
-- New commits are posted in order with a short summary and direct links.
+- On startup, the bot records the latest commit per repository to avoid reposting history.
+- Every `poll_interval` seconds, it queries the GitHub API for recent commits on each branch.
+- Newly discovered commits are posted in order with a short summary and direct links.
 
 ## Troubleshooting
 - Ensure the bot has permission to post in the configured channel.
 - If you see rate-limit warnings, add a `github_token` to the config.
-- To increase verbosity, edit `setup_logging()` in `bot.py` to use `DEBUG` level logging.
+- Increase log verbosity by setting `DEBUG` in `setup_logging()` inside `bot.py`.
